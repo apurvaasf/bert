@@ -46,6 +46,10 @@ flags.DEFINE_string(
     "output_dir", None,
     "The output directory where the model checkpoints will be written.")
 
+flags.DEFINE_string(
+    "export_dir", None,
+    "The dir where the exported model will be written.")
+
 ## Other parameters
 flags.DEFINE_string("train_file", None,
                     "SQuAD json for training. E.g., train-v1.1.json")
@@ -1118,8 +1122,20 @@ def validate_flags_or_throw(bert_config):
     raise ValueError(
         "The max_seq_length (%d) must be greater than max_query_length "
         "(%d) + 3" % (FLAGS.max_seq_length, FLAGS.max_query_length))
-
-
+    
+def serving_input_fn():
+    label_ids = tf.placeholder(tf.int32, [None], name='label_ids')
+    input_ids = tf.placeholder(tf.int32, [None, FLAGS.max_seq_length], name='input_ids')
+    input_mask = tf.placeholder(tf.int32, [None, FLAGS.max_seq_length], name='input_mask')
+    segment_ids = tf.placeholder(tf.int32, [None, FLAGS.max_seq_length], name='segment_ids')
+    input_fn = tf.estimator.export.build_raw_serving_input_receiver_fn({
+        'label_ids': label_ids,
+        'input_ids': input_ids,
+        'input_mask': input_mask,
+        'segment_ids': segment_ids,
+    })()
+    return input_fn    
+    
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -1271,6 +1287,10 @@ def main(_):
                       FLAGS.n_best_size, FLAGS.max_answer_length,
                       FLAGS.do_lower_case, output_prediction_file,
                       output_nbest_file, output_null_log_odds_file)
+    
+    if FLAGS.do_export:
+        estimator._export_to_tpu = False
+        estimator.export_savedmodel(FLAGS.export_dir, serving_input_fn)
 
 
 if __name__ == "__main__":
